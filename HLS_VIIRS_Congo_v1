@@ -1,0 +1,176 @@
+//Thesis GEE Script
+//June 14, 2026
+//Levi Mitchell
+//University of Ottawa
+
+//
+// Initial Script for acquiring satellite imagery rasters 
+// 
+
+//Language: JavaScript
+
+//
+// Script Contents
+// 0. Imports
+//    a. Feature in GEE outside of script at top of console
+// 1. Assets
+// 2. Configuration (filtering time, area, and bands of interest
+//     a. Change here for different provinces, dates, and bands
+// 3. Area of Interest
+// 4. Cloud Mask
+// 5. HLS Scaling
+// 6. Indices
+// 7. Add DEM
+// 8. add Nighttime lights
+// 9. Visualizations
+// 10. add Map Layers
+// 11. add Exports
+//
+
+//Begin
+
+// 1. Assets
+var prov = prov;
+var dem = ee.Image('NASA/NASADEM_HGT/001').select('elevation');
+var nightTimeLight = ee.ImageCollection('NOAA/VIIRS/DNB/ANNUAL_V21')
+
+// 2. Configuration
+// Here are the variables to change for the imagery acquisition
+// Years of study
+// Month and day
+// Province (still have to decide which province is best to do)
+// Export parameters
+
+var years = ee.List.sequence(2015, 2025);
+var doy_start_month = 1;
+var doy_start_day = 15;
+var doy_end_month = 12;
+var doy_end_day = 15;
+var province_name = 'Tshopo';
+var export_scale = 30;
+var export_crs = 'EPSG:4326;
+var export_folder = 'Thesis_Gee'
+var export_bands = ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'NDVI', 'NDWI', 'EVI', 'elevation', 'nighttime_light']
+  //NDBI was removed and nighttime lights used instead.
+
+// 3. Area of Interests
+//Not using a ternary operator (? & :), instead, setting the aoi variable to match the configuration.
+//But if it is not specified then it will grab all provinces
+
+var aoi;
+if (province_sname !== null) {
+  aoi = prov.filter(
+    ee.Filter.eq('ShapeName', province_name)
+  );
+} else {
+  aoi = prov;
+}
+
+// 4. Cloud mask
+// Function to mask cloud values from HLS data. 
+// It uses the bitmask function, applied to each image when called.
+//
+function maskHLS(image) {
+  var fmask = image.select('Fmask');
+  var cloud = 1 << 1;
+  var cloud_shadow = 1 << 3;
+  var mask = fmask.bitwiseAnd(cloud).eq(0))
+              .and(fmask.bitwiseAnd(cloud_shadow).eq(0));
+  return image.updateMask(mask);
+  
+// 5. HLS Scaling
+// Function to scale pixels and reflectance bands between 0 & 1.
+// Helps with indices
+//
+
+//function to apply to each image
+function scaleHLS(image)
+  var reflectance_bands = image.select(['B2', 'B3', 'B4', 'B5', 'B6', 'B7'])
+                            .multiply(0.0001);
+  return image.addBands(reflectance_bands, null, true)
+          .copyProperties(image, ['system:time_start']);
+}
+
+// 6. Indices calculations
+// start with assigning colour names for each band
+// Caluculate based on published formulas
+// 
+
+//function to apply to each image
+function addIndices(image) {
+  var nir = image.select('B5');
+  var red = image.select('B4');
+  var green = image.select('B3');
+  var blue = image.select('B2');
+  var swir1 = image.select('B6');
+  var swir2 = image.select('B7');
+
+  var ndvi = nir.subtract(red)
+            .divide(nir.add(red))
+            .rename('NDVI');
+  var ndwi = green.subtract(nir)
+            .divide(green.add(nir))
+            .rename('NDWI');
+  var ndbi = swir1.subtract(nir)
+            .divide(swir1.add(nir))
+            .rename('NDBI');
+  var evi = image.expression(
+            '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))',
+            {NIR: nir,
+            RED: red,
+            BLUE: blue
+            })
+            .rename('EVI')
+
+return image.addBands([ndvi, ndwi, evi]);
+}
+
+// 7. Add DEM
+// DEM is reletively unchanging, so this is a single observation added to each year
+function addElevation(image) {
+  return image.addBands(dem.rename('elevation'));
+}
+
+// 8. add Nighttime lights
+// preload the nightlight configuration and data
+var nightTimeLight = ee.ImageCollection('NOAA/VIIRS/DNB/ANNUAL_V21')
+
+function addNightTimeLight(image, start, end) {
+  var ntl = nightTimeLight
+  .filterDate(start, end)
+  .filterBounds(aoi)
+  .median()
+  .clip(aoi)
+  .rename('nighttime_light');
+  
+  return image.addBands(ntl);
+}
+
+// 9. Annual composites
+// Here is where finally the satellite imagery is called in, and the configuration applied.
+// The DEM and nightlights are also added here
+
+
+var annualComposites = ee.ImageCollection(
+  years.map(function(year_of_interest) {
+    var year = ee.Number(year_of_interest).int();
+    var start = ee.Date.fromYMD(year, doy_start_month, doy_start_day);
+    var end = ee.Date.fromYMD(year, doy_end_day, doy_end_month);
+    
+        var composite = ee.ImageCollection('NASA/HLS/HLSL30/v002')
+          .filterDate(start, end)
+          .filterBounds(aoi)
+          .map(maskHLS)
+          .map(scaleHLS)            
+          .select(['B2', 'B3', 'B4', 'B5', 'B6', 'B7'])
+          .map(addIndices)
+          .median()
+          .clip(aoi)
+          .set('year', year)
+          .set('system:time_start', start.millis());
+
+        var finalImage = addElevation(
+          addNightTimeLight(composite, start, end)
+          );
+          
+    return finalImage;
