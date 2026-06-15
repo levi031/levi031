@@ -22,12 +22,19 @@
 // 6. Indices
 // 7. Add DEM
 // 8. add Nighttime lights
-// 9. Visualizations
-// 10. add Map Layers
-// 11. add Exports
+// 9. Annual Composites
+// 10. Visualizations
+// 11. add Map Layers
+// 12. add Exports
 //
 
 //Begin
+//0. Imports
+//import these assets at top of script
+//var FW_veg: FW_veg
+//var SPCB: SPCB_boundary
+//var prov: geoboundaries
+
 
 // 1. Assets
 var prov = prov;
@@ -51,14 +58,14 @@ var export_scale = 30;
 var export_crs = 'EPSG:4326;
 var export_folder = 'Thesis_Gee'
 var export_bands = ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'NDVI', 'NDWI', 'EVI', 'elevation', 'nighttime_light']
-  //NDBI was removed and nighttime lights used instead.
+  //NDBI was removed and nighttime lights were used instead.
 
 // 3. Area of Interests
 //Not using a ternary operator (? & :), instead, setting the aoi variable to match the configuration.
 //But if it is not specified then it will grab all provinces
 
 var aoi;
-if (province_sname !== null) {
+if (province_name !== null) {
   aoi = prov.filter(
     ee.Filter.eq('ShapeName', province_name)
   );
@@ -174,3 +181,114 @@ var annualComposites = ee.ImageCollection(
           );
           
     return finalImage;
+
+
+// 10. Visualizations
+// Not used in analysis, but useful in GEE for observations
+// Visible Light
+var visRGB = {
+  bands: ['B4', 'B3', 'B2'],
+  min: 0.01,
+  max: 0.18,
+  gamma: 1.4
+};
+
+// False colour composite
+
+var visFCC = (
+  bands: ['B5', 'B4', 'B3'],
+  min: 0.01
+  max: 0.45,
+  gamma: 1.5
+};
+
+var visNDVI = {
+  min: 0.2,
+  max: 0.85,
+  palette: ['//ffffcc', '//a1dab4', '//41b6c4','//2c7fb8','//253494']
+
+var visNDBI = {
+  min: -0.5,
+  max: 0.5,
+  palette: ['cyan', 'white', '//8B1A1A']
+};
+
+var visDEM = {
+  min: 200, 
+  max: 1600,
+  palette: ['//006633','//E5FFCC','//99CC66','//662A00','//D8D8D8','//F5F5F5']
+};
+
+//11. Add Maps to GEE
+Map.centerObject(aoi, 7);
+var displayYeart0 = 2015;
+var displayYeart1 = 2017;
+var displayYeart2 = 2019;
+var displayYeart3 = 2021;
+var displayYeart4 = 2023;
+var displayYeart5 = 2025;
+
+var displayt0 = annualComposites
+  .filter(ee.Filter.eq('year', displayYeart0))
+  .first();
+  
+var displayt1 = annualComposites
+  .filter(ee.Filter.eq('year', displayYeart1))
+  .first();
+  
+var displayt2 = annualComposites
+  .filter(ee.Filter.eq('year', displayYeart2))
+  .first();
+  
+var displayt3 = annualComposites
+  .filter(ee.Filter.eq('year', displayYeart3))
+  .first();
+
+var displayt4 = annualComposites
+  .filter(ee.Filter.eq('year', displayYeart4))
+  .first();
+
+var displayt5 = annualComposites
+  .filter(ee.Filter.eq('year', displayYeart5))
+  .first();
+
+var displayYear = displayt0
+
+Map.addLayer(aoi, {color: 'FF0000'}, 'Province boundary', false);
+Map.addLayer(dem, visDEM, 'DEM (NASADEM)', false);
+Map.addLayer(display, visRGB, 'HLS RGB '+ displayYear, true);
+Map.addLayer(display, visFCC, 'HLS FCC '+ displayYear, false);
+Map.addLayer(display.select('NDVI'), visNDVI,'NDVI '+ displayYear, false);
+
+// 12. Exporting loop
+//Unnesting the loop
+#Export loop
+years.evaluate(function(yearList) {
+  yearList.forEach(function(Year) {
+    var composite = annualComposites
+      .filter(ee.Filter.eq('year', year))
+      .first()
+      .select(export_bands)
+      .toFloat();
+
+    var label;
+    if (province_name !==null) {
+      label = province_name.replace(/ /g, '_') + '_' + year;
+    } else {
+      label = 'AllProvinces_' + year;
+    }
+
+    Export.image.toDrive({
+      image: composite, 
+      description: 'HLS_' + label,
+      folder: export_folder,
+      fileNamePrefix: 'HLS_' + label,
+      region: aoi.geometry().bounds(),
+      scale: export_scale,
+      crs: export_crs,
+      maxPixels: 1e13
+      });
+
+  });
+};
+  
