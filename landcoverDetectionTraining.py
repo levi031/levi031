@@ -10,9 +10,30 @@ from datetime import datetime
 from ConvolutionNeuralNetwork import ResUNET, ImprovedUNet
 from Datasets import MultiModalSegmentationDataset
 
+#Thesis GEE Script
+#June 16, 2026
+#Levi Mitchell
+#University of Ottawa
+
+#
+# Initial Script for acquiring satellite imagery rasters 
+# 
+
+#Language: python
+
+
+
+
+
+
 #Contents
 #1.0 Configuration
-
+    #1.1 configuration block
+    #1.2 Study area and date
+    #1.3 Project Path
+    #1.4 Results directory
+    #1.5 Data directories
+#2.0 
 
 
 #1.0 Configuration
