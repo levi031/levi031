@@ -100,3 +100,14 @@ print(f"Derived features: {config['include_topography_calculations']}")
 print(f"ASPP module: {config['use_aspp']}")
 print("...")
 
+#Read classes from training data
+print("\n[1/5] Determine classes from calibration/training data")
+dataset_temp = SegmentationDataset(HLS_dir, train_dir)
+
+all_classes = set()
+for sample_index in range(len(dataset_temp)):
+    image, mask = dataset_temp[sample_index]
+    all_classes.update(mask.numpy().flatten())
+
+all_classes = sorted(all__classes)
+class_mapping = {cls: i for i, cls in enumerate(all_classes)}
