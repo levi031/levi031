@@ -111,3 +111,12 @@ for sample_index in range(len(dataset_temp)):
 
 all_classes = sorted(all__classes)
 class_mapping = {cls: i for i, cls in enumerate(all_classes)}
+
+#pixel counts per class
+count = 
+
+#weights determined by 1.0/square root of the pixel
+weights = {
+    1.0 / np.sqrt(cls{count})
+    if != 255
+}
